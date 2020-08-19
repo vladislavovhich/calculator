@@ -1,3 +1,5 @@
+import {strict} from "assert";
+
 type Operands = " + " | " - " | " / " | " * " | "^" | "sqrt" |""
 type BinarryOp = {
     first:number
@@ -22,7 +24,7 @@ type GetBrackets = {
 }
 
 class Calculator {
-    private static operands = {
+    public static operands = {
         " + ": 1,
         " - ": 1,
         " / ": 2,
@@ -30,7 +32,7 @@ class Calculator {
         "^": 3,
         "sqrt": 4
     }
-    private static operations = {
+    public static operations = {
         " + ": ({first, second}: BinarryOp) => first + second,
         " - ": ({first, second}: BinarryOp) => first - second,
         " * ": ({first, second}: BinarryOp) => first * second,
@@ -39,16 +41,16 @@ class Calculator {
         "sqrt": ({number}:Sqrt) => +Math.sqrt(number).toFixed(2)
     }
 
-    private static hasOperands(expression: string): boolean {
+    public static hasOperands(expression: string, offset:number = 0): boolean {
         for (let operand in this.operands) {
-            if (expression.includes(operand)) {
+            if (expression.indexOf(operand, offset) !== -1) {
                 return expression.includes(operand)
             }
         }
 
         return false
     }
-    private static getOperand(expression: string):GetOperand {
+    public static getOperand(expression: string, offset:number = 0):GetOperand {
         let result: GetOperand = {
             position: 0,
             operand: "",
@@ -59,7 +61,7 @@ class Calculator {
         type OperandType = keyof typeof operands
 
         for (let operand in this.operands) {
-            if (expression.includes(operand)) {
+            if (expression.indexOf(operand, offset) !== -1) {
                 if (this.operands[operand as OperandType] > result.priority) {
                     result.position = expression.indexOf(operand)
                     result.operand = operand
@@ -76,10 +78,10 @@ class Calculator {
         return result
     }
 
-    private static hasBrackets(expression:string):boolean {
+    public static hasBrackets(expression:string):boolean {
         return expression.includes("(") && expression.includes(")") && this.checkBrackets(expression)
     }
-    private static checkBrackets(expression:string):boolean {
+    public static checkBrackets(expression:string):boolean {
         let bracketsAmount = 0
 
         for (let i = 0; i < expression.length; i++) {
@@ -99,7 +101,7 @@ class Calculator {
 
         return bracketsAmount === 0
     }
-    private static getBrackets(expression:string, offset:number = 0):GetBrackets {
+    public static getBrackets(expression:string, offset:number = 0):GetBrackets {
         const result:GetBrackets = {
             start: 0,
             end: expression.length
@@ -124,7 +126,7 @@ class Calculator {
         return result
     }
 
-    private static getFirstNumber(expression:string, position:number, offset:number = 0):number {
+    public static getFirstNumber(expression:string, position:number, offset:number = 0):number|null {
         let currentPos = position - offset
         let number = ""
 
@@ -137,9 +139,13 @@ class Calculator {
             currentPos--
         }
 
+        if (number === "") {
+            return null
+        }
+
         return +(number.split("").reverse().join(""))
     }
-    private static getSecondNumber(expression:string, position:number, offset:number = 0):number {
+    public static getSecondNumber(expression:string, position:number, offset:number = 0):number|null {
         let currentPos = position + offset
         let number = ""
 
@@ -152,6 +158,10 @@ class Calculator {
             currentPos++
         }
 
+        if (number === "") {
+            return null
+        }
+
         return +number
     }
 
@@ -161,8 +171,11 @@ class Calculator {
 
         return this.operations[operand as OperandType](params)
     }
+    public static calculate(expression:string):number {
+        if (!checkExpression(expression)) {
+            return -1
+        }
 
-    static calculate(expression:string):number {
         while (this.hasOperands(expression) || this.hasBrackets(expression)) {
             const {operand, position} = this.getOperand(expression)
 
@@ -195,8 +208,8 @@ class Calculator {
             }
 
             if (operand === "^") {
-                first = this.getFirstNumber(expression, position, 1)
-                second = this.getSecondNumber(expression, position, 1)
+                first = this.getFirstNumber(expression, position, 1) as number
+                second = this.getSecondNumber(expression, position, 1) as number
 
                 result = this.calc(operand as Operands, {
                     number:first,
@@ -205,8 +218,8 @@ class Calculator {
 
                 expression = expression.replace(`${first}^${second}`, result.toString())
             } else {
-                first = this.getFirstNumber(expression, position + 1, 2)
-                second = this.getSecondNumber(expression, position + 1, 2)
+                first = this.getFirstNumber(expression, position + 1, 2) as number
+                second = this.getSecondNumber(expression, position + 1, 2) as number
 
                 result = this.calc(operand as Operands, {
                     first:first,
@@ -221,7 +234,96 @@ class Calculator {
     }
 }
 
-// @ts-ignore
-window.calc = (expression:string) => Calculator.calculate(expression)
+const checkExpression = (expression:string):boolean => {
+    const getOperand = (offset:number):GetOperand => {
+        let position = -1
+        let op = ""
 
-export default Calculator
+        for (let operand in Calculator.operands) {
+            if (position === -1) {
+                position = expression.indexOf(operand, offset)
+                op = operand
+            }
+            if (expression.indexOf(operand, offset) !== -1) {
+                if (position > expression.indexOf(operand, offset)) {
+                    position = expression.indexOf(operand, offset)
+                    op = operand
+                }
+            }
+        }
+
+        return {
+            position: position,
+            operand: op
+        } as GetOperand
+    }
+    const hasFirstNumber = (position:number, offset:number = 0):boolean => {
+        return !!Calculator.getFirstNumber(expression, position, offset)
+    }
+    const hasSecondNumber = (position:number, offset:number = 0):boolean => {
+        return !!Calculator.getSecondNumber(expression, position, offset)
+    }
+
+    //FOR CHECK
+    const checkNumbers = ():boolean => {
+        let offset = 0
+
+        while (Calculator.hasOperands(expression, offset)) {
+            let {position, operand} = getOperand(offset)
+            let {position: specPosition, operand: specOperand} = Calculator.getOperand(expression)
+
+            if (specOperand === "sqrt") {
+                const {start, end} = Calculator.getBrackets(expression, specPosition + 3)
+                const innerExpression = expression.slice(start + 1, end - 1)
+
+                if (!checkExpression(innerExpression)) {
+                    return false
+                } else {
+                    const result = Calculator.calculate(innerExpression)
+
+                    expression = expression.replace(`sqrt(${innerExpression})`, result.toString())
+                }
+            } else if (operand === "^") {
+                if (
+                    !hasFirstNumber(position, 1) ||
+                    !hasSecondNumber(position, 1)
+                ) {
+                    return false
+                }
+            } else {
+                if (
+                    !hasFirstNumber(position + 1, 2) ||
+                    !hasSecondNumber(position + 1, 2)
+                ) {
+                    return false
+                }
+            }
+
+            offset = position + 1
+        }
+
+        return true
+    }
+    const checkMinuses = ():boolean => {
+        return !expression.includes("--")
+    }
+    const checkDots = ():boolean => {
+        return !expression.includes("..")
+    }
+
+    return Calculator.checkBrackets(expression) && checkNumbers() && checkMinuses() && checkDots()
+}
+
+// @ts-ignore
+window.calculator = Calculator
+// @ts-ignore
+window.checkExpression = checkExpression
+
+export default {
+    calc(expression: string):number {
+        return Calculator.calculate(expression)
+    },
+    checkExpression(expression:string):boolean {
+        return checkExpression(expression)
+    }
+}
